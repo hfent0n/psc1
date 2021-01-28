@@ -289,7 +289,10 @@ void updateBody() {
     v[i][2] = v[i][2] + timeStepSize * force2[i] / mass[i];
   }
   
-
+  if (touched){
+    printMass();
+    cout << "--------------------" << endl;
+  }
   
 
   // update merged velocities and positions. Set mass to 0
@@ -307,18 +310,24 @@ void updateBody() {
   }
 
   //swap all 0s to end of the array
-  if (touched) {
-    for (int anchor = 0, cur = 0; cur < NumberOfBodies; cur++) {
-      if (mass[cur] != 0.0) {
-        swap(mass[anchor], mass[cur]);
-        swap(v[anchor], v[cur]);
-        swap(x[anchor], x[cur]); 
-      }
+  
+  for (int anchor = 0, cur = 0; cur < NumberOfBodies; cur++) {
+    if (mass[cur] != 0.0) {
+      swap(mass[anchor], mass[cur]);
+      swap(v[anchor], v[cur]);
+      swap(x[anchor], x[cur]);
+      anchor++; 
     }
   }
+  
+  
 
   NumberOfBodies -= toBeMerged.size();
 
+  if (touched){
+    printMass();
+    cout << "--------------------" << endl;
+  }
   
   
 
