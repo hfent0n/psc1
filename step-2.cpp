@@ -245,8 +245,9 @@ void updateBody() {
   }
 
   vector<vector<int>> toBeMerged;
+  #pragma omp simd collapse(2);
   for (int i = 0; i < NumberOfBodies; i++){
-    for (int j = i + 1; j < NumberOfBodies; j++){
+    for (int j = 0; j < NumberOfBodies; j++){
       const double distance = sqrt(
         (x[i][0]-x[j][0]) * (x[i][0]-x[j][0]) +
         (x[i][1]-x[j][1]) * (x[i][1]-x[j][1]) +
@@ -258,17 +259,14 @@ void updateBody() {
         touched = true;
       }
 
-      double forceX = (x[j][0]-x[i][0]) * mass[i]*mass[j] / distance / distance / distance ;
-      double forceY = (x[j][1]-x[i][1]) * mass[i]*mass[j] / distance / distance / distance ;
-      double forceZ = (x[j][2]-x[i][2]) * mass[i]*mass[j] / distance / distance / distance ;
+       
       // x,y,z forces acting on particle i
-      force0[i] += forceX;
-      force1[i] += forceY;
-      force2[i] += forceZ;
-      // equal and opposite force
-      force0[j] -= forceX;
-      force1[j] -= forceY;
-      force2[j] -= forceZ;
+      if (distance){
+        force0[i] += (x[j][0]-x[i][0]) * mass[i]*mass[j] / distance / distance / distance ;
+        force1[i] += (x[j][1]-x[i][1]) * mass[i]*mass[j] / distance / distance / distance ;
+        force2[i] += (x[j][2]-x[i][2]) * mass[i]*mass[j] / distance / distance / distance ;
+      }
+      
 
       minDx = std::min( minDx, distance );
 
