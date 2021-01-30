@@ -112,6 +112,8 @@ void setUp(int argc, char** argv) {
     }
   }
 
+  
+
   std::cout << "created setup with " << NumberOfBodies << " bodies" << std::endl;
   
   if (tPlotDelta<=0.0) {
@@ -275,6 +277,8 @@ void updateBody() {
     }
   }
   
+  
+
   // update positions
   for ( int i = 0; i<NumberOfBodies; i++){
     x[i][0] = x[i][0] + timeStepSize * v[i][0];
@@ -322,7 +326,7 @@ void updateBody() {
 
   
   
-
+  
 
   t += timeStepSize;
 
@@ -368,9 +372,9 @@ int main(int argc, char** argv) {
 
   setUp(argc,argv);
 
-  // openParaviewVideoFile();
+  //openParaviewVideoFile();
 
-  // int snapshotCounter = 0;
+  int snapshotCounter = 0;
   // if (t > tPlot) {
   //   printParaviewSnapshot();
   //   std::cout << "plotted initial setup" << std::endl;
@@ -381,24 +385,24 @@ int main(int argc, char** argv) {
   while (t<=tFinal) {
     updateBody();
     timeStepCounter++;
-    // if (t >= tPlot) {
-    //   printParaviewSnapshot();
-    //   std::cout << "plot next snapshot"
-    // 		    << ",\t time step=" << timeStepCounter
-    // 		    << ",\t t="         << t
-		// 		<< ",\t dt="        << timeStepSize
-		// 		<< ",\t v_max="     << maxV
-		// 		<< ",\t dx_min="    << minDx
-		// 		<< std::endl;
+    if (t >= tPlot) {
+      // printParaviewSnapshot();
+      // std::cout << "plot next snapshot"
+    	// 	    << ",\t time step=" << timeStepCounter
+    	// 	    << ",\t t="         << t
+			// 	<< ",\t dt="        << timeStepSize
+			// 	<< ",\t v_max="     << maxV
+			// 	<< ",\t dx_min="    << minDx
+			// 	<< std::endl;
 
-    //   tPlot += tPlotDelta;
-    // }
+      tPlot += tPlotDelta;
+    }
   }
 
   std::cout << "Number of remaining objects: " << NumberOfBodies << std::endl;
   std::cout << "Position of first remaining object: " << x[0][0] << ", " << x[0][1] << ", " << x[0][2] << std::endl;
 
-  // closeParaviewVideoFile();
+  //closeParaviewVideoFile();
 
   return 0;
 }
