@@ -21,7 +21,8 @@
 #include <iomanip>
 #include <cstdio>
 #include <cstdlib>
-
+#include <cstring>
+#include <algorithm>
 
 #include <cmath>
 #include <vector>
@@ -255,17 +256,75 @@ void updateBody() {
       toBeMerged[i][j] = 0;
     }
   }
+
+  //create copies of positions  
+  double x0_c[NumberOfBodies];
+  double x1_c[NumberOfBodies];
+  double x2_c[NumberOfBodies];
+
+  memcpy(x0_c, x0, NumberOfBodies*sizeof(double));
+  memcpy(x1_c, x1, NumberOfBodies*sizeof(double));
+  memcpy(x2_c, x2, NumberOfBodies*sizeof(double));
+
+  //create copies of the velocities
+  double v0_c[NumberOfBodies];
+  double v1_c[NumberOfBodies];
+  double v2_c[NumberOfBodies];
   
-  //#pragma omp simd collapse(2), reduction(min:minDx)
+  memcpy(v0_c, v0, NumberOfBodies*sizeof(double));
+  memcpy(v1_c, v1, NumberOfBodies*sizeof(double));
+  memcpy(v2_c, v2, NumberOfBodies*sizeof(double));
+
   
+
+  //calculate force at t
   for (int i = 0; i < NumberOfBodies; i++){
     #pragma omp simd reduction(min:minDx)
     for (int j = 0; j < NumberOfBodies; j++){
       
       const double distance = sqrt(
-        (x0[i]-x0[j]) * (x0[i]-x0[j]) +
-        (x1[i]-x1[j]) * (x1[i]-x1[j]) +
-        (x2[i]-x2[j]) * (x2[i]-x2[j])
+        (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
+        (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
+        (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
+      );
+
+      
+      // x,y,z forces acting on particle i
+      if (distance){
+        force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+        force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+        force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+      }
+      minDx = std::min( minDx, distance );
+    }
+  }
+
+  // update positions for t + 0.5
+  #pragma ivdep 
+  for ( int i = 0; i<NumberOfBodies; i++){
+    x0_c[i] = x0_c[i] + (timeStepSize * 0.5) * v0_c[i];
+    x1_c[i] = x1_c[i] + (timeStepSize * 0.5) * v1_c[i];
+    x2_c[i] = x2_c[i] + (timeStepSize * 0.5) * v2_c[i];
+  }
+  
+  // update velocities for t + 0.5 
+  #pragma ivdep 
+  for ( int i = 0; i < NumberOfBodies; i++){
+    v0_c[i] = v0_c[i] + (timeStepSize * 0.5) * force0[i] / mass[i];
+    v1_c[i] = v1_c[i] + (timeStepSize * 0.5) * force1[i] / mass[i];
+    v2_c[i] = v2_c[i] + (timeStepSize * 0.5) * force2[i] / mass[i];
+  }
+
+
+  //calculate forces at the t + 0.5
+  for (int i = 0; i < NumberOfBodies; i++){
+    #pragma omp simd reduction(min:minDx)
+    for (int j = 0; j < NumberOfBodies; j++){
+      
+      const double distance = sqrt(
+        (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
+        (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
+        (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
       );
 
       if (distance <= C * (mass[i]*mass[j])) {
@@ -277,40 +336,31 @@ void updateBody() {
         
       }
       // x,y,z forces acting on particle i
-      
-
       if (distance){
-        force0[i] += (x0[j]-x0[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        force1[i] += (x1[j]-x1[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        force2[i] += (x2[j]-x2[i]) * mass[i]*mass[j] / (distance*distance*distance);
-
-        minDx = std::min( minDx, distance );
-      
+        force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+        force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+        force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
       }
-
+      minDx = std::min( minDx, distance );
     }
   }
-  
-  
-  // update positions
-  
+
+  // update positions for t + 1
   #pragma ivdep 
   for ( int i = 0; i<NumberOfBodies; i++){
-    x0[i] = x0[i] + timeStepSize * v0[i];
-    x1[i] = x1[i] + timeStepSize * v1[i];
-    x2[i] = x2[i] + timeStepSize * v2[i];
+    x0[i] = x0[i] + timeStepSize * v0_c[i];
+    x1[i] = x1[i] + timeStepSize * v1_c[i];
+    x2[i] = x2[i] + timeStepSize * v2_c[i];
   }
   
-  // update velocities
-  
+  // update velocities for t + 1
   #pragma ivdep 
   for ( int i = 0; i < NumberOfBodies; i++){
     v0[i] = v0[i] + timeStepSize * force0[i] / mass[i];
     v1[i] = v1[i] + timeStepSize * force1[i] / mass[i];
     v2[i] = v2[i] + timeStepSize * force2[i] / mass[i];
   }
-  
-  
+
 
   // update merged velocities and positions. Set mass to 0
   if (touched){
@@ -345,6 +395,10 @@ void updateBody() {
         anchor++; 
       }
     }
+
+    printMass();
+    printPos();
+    printVel();
   }
   
   
@@ -354,8 +408,7 @@ void updateBody() {
 
   for (int i = 0; i < NumberOfBodies; i++){
     maxV = max( maxV, sqrt( v0[i]*v0[i] + v1[i]*v1[i] + v2[i]*v2[i] ) );
-  }
-  
+  } 
 
 
   t += timeStepSize;
@@ -405,11 +458,11 @@ int main(int argc, char** argv) {
   openParaviewVideoFile();
 
   int snapshotCounter = 0;
-  // if (t > tPlot) {
-  //   printParaviewSnapshot();
-  //   std::cout << "plotted initial setup" << std::endl;
-  //   tPlot = tPlotDelta;
-  // }
+  if (t > tPlot) {
+    printParaviewSnapshot();
+    std::cout << "plotted initial setup" << std::endl;
+    tPlot = tPlotDelta;
+  }
 
   int timeStepCounter = 0;
   
@@ -434,7 +487,7 @@ int main(int argc, char** argv) {
   std::cout << "Number of remaining objects: " << NumberOfBodies << std::endl;
   std::cout << "Position of first remaining object: " << x0[0] << ", " << x1[0] << ", " << x2[0] << std::endl;
 
-  //closeParaviewVideoFile();
+  closeParaviewVideoFile();
 
   return 0;
 }

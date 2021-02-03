@@ -19,8 +19,7 @@
 #include <math.h>
 #include <limits>
 #include <iomanip>
-#include <cstdio>
-#include <cstdlib>
+
 
 
 #include <cmath>
@@ -39,16 +38,12 @@ int NumberOfBodies = 0;
  * Pointer to pointers. Each pointer in turn points to three coordinates, i.e.
  * each pointer represents one molecule/particle/body.
  */
-double* x0;
-double* x1;
-double* x2;
+double** x;
 
 /**
  * Equivalent to x storing the velocities.
  */
-double* v0;
-double* v1;
-double* v2;
+double** v;
 
 /**
  * One mass entry per molecule/particle.
@@ -86,16 +81,10 @@ void setUp(int argc, char** argv) {
   NumberOfBodies = (argc-4) / 7;
 
   C = 0.01 / NumberOfBodies; 
- 
-  x0    = new double [NumberOfBodies];
-  x1    = new double [NumberOfBodies];
-  x2    = new double [NumberOfBodies];
 
-  v0    = new double [NumberOfBodies];
-  v1    = new double [NumberOfBodies];
-  v2    = new double [NumberOfBodies];
-
-  mass  = new double [NumberOfBodies];
+  x    = new double*[NumberOfBodies];
+  v    = new double*[NumberOfBodies];
+  mass = new double [NumberOfBodies];
 
   int readArgument = 1;
 
@@ -104,14 +93,16 @@ void setUp(int argc, char** argv) {
   timeStepSize = std::stof(argv[readArgument]); readArgument++;
 
   for (int i=0; i<NumberOfBodies; i++) {
-    
-    x0[i] = std::stof(argv[readArgument]); readArgument++;
-    x1[i] = std::stof(argv[readArgument]); readArgument++;
-    x2[i] = std::stof(argv[readArgument]); readArgument++;
+    x[i] = new double[3];
+    v[i] = new double[3];
 
-    v0[i] = std::stof(argv[readArgument]); readArgument++;
-    v1[i] = std::stof(argv[readArgument]); readArgument++;
-    v2[i] = std::stof(argv[readArgument]); readArgument++;
+    x[i][0] = std::stof(argv[readArgument]); readArgument++;
+    x[i][1] = std::stof(argv[readArgument]); readArgument++;
+    x[i][2] = std::stof(argv[readArgument]); readArgument++;
+
+    v[i][0] = std::stof(argv[readArgument]); readArgument++;
+    v[i][1] = std::stof(argv[readArgument]); readArgument++;
+    v[i][2] = std::stof(argv[readArgument]); readArgument++;
 
     mass[i] = std::stof(argv[readArgument]); readArgument++;
 
@@ -122,6 +113,7 @@ void setUp(int argc, char** argv) {
   }
 
   
+
   std::cout << "created setup with " << NumberOfBodies << " bodies" << std::endl;
   
   if (tPlotDelta<=0.0) {
@@ -180,11 +172,11 @@ void printParaviewSnapshot() {
 //      << "   <DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">";
 
   for (int i=0; i<NumberOfBodies; i++) {
-    out << x0[i]
+    out << x[i][0]
         << " "
-        << x1[i]
+        << x[i][1]
         << " "
-        << x2[i]
+        << x[i][2]
         << " ";
   }
 
@@ -206,9 +198,13 @@ void printMass(){
   cout << ']' << endl;
 }
 void printPos(){
+  
   for (int i = 0; i < NumberOfBodies; i++){
     cout << "[";
-    cout << x0[i] << ", " << x1[i] << ", " << x2[i];
+    for (int j = 0; j < 3; j++){
+      if (j != 2) cout << x[i][j] << ", ";
+      else cout << x[i][j];
+    }
     cout << ']' << endl;
   }
  
@@ -218,7 +214,10 @@ void printVel(){
   
   for (int i = 0; i < NumberOfBodies; i++){
     cout << "[";
-    cout << v0[i] << ", " << v1[i] << ", " << v2[i];
+    for (int j = 0; j < 3; j++){
+      if(j!=2) cout << v[i][j] << ", ";
+      else cout << v[i][j];
+    }
     cout << ']' << endl;
   }
  
@@ -247,116 +246,96 @@ void updateBody() {
     force2[i] = 0.0;
   }
 
-  
-  int mergeCount=0;
-  int toBeMerged[NumberOfBodies][NumberOfBodies];
+  vector<vector<int>> toBeMerged;
   for (int i = 0; i < NumberOfBodies; i++){
-    for (int j = 0; j < NumberOfBodies; j++){
-      toBeMerged[i][j] = 0;
-    }
-  }
-  
-  //#pragma omp simd collapse(2), reduction(min:minDx)
-  
-  for (int i = 0; i < NumberOfBodies; i++){
-    #pragma omp simd reduction(min:minDx)
-    for (int j = 0; j < NumberOfBodies; j++){
-      
+    for (int j = i + 1; j < NumberOfBodies; j++){
       const double distance = sqrt(
-        (x0[i]-x0[j]) * (x0[i]-x0[j]) +
-        (x1[i]-x1[j]) * (x1[i]-x1[j]) +
-        (x2[i]-x2[j]) * (x2[i]-x2[j])
+        (x[i][0]-x[j][0]) * (x[i][0]-x[j][0]) +
+        (x[i][1]-x[j][1]) * (x[i][1]-x[j][1]) +
+        (x[i][2]-x[j][2]) * (x[i][2]-x[j][2])
       );
 
       if (distance <= C * (mass[i]*mass[j])) {
-        if (i<j){
-          toBeMerged[i][j] = 1;
-          touched = true;
-          mergeCount++;
-        }
-        
+        toBeMerged.push_back(vector<int> {i, j});
+        touched = true;
       }
+
+      double forceX = (x[j][0]-x[i][0]) * mass[i]*mass[j] / distance / distance / distance ;
+      double forceY = (x[j][1]-x[i][1]) * mass[i]*mass[j] / distance / distance / distance ;
+      double forceZ = (x[j][2]-x[i][2]) * mass[i]*mass[j] / distance / distance / distance ;
       // x,y,z forces acting on particle i
-      
+      force0[i] += forceX;
+      force1[i] += forceY;
+      force2[i] += forceZ;
+      // equal and opposite force
+      force0[j] -= forceX;
+      force1[j] -= forceY;
+      force2[j] -= forceZ;
 
-      if (distance){
-        force0[i] += (x0[j]-x0[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        force1[i] += (x1[j]-x1[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        force2[i] += (x2[j]-x2[i]) * mass[i]*mass[j] / (distance*distance*distance);
-
-        minDx = std::min( minDx, distance );
-      
-      }
+      minDx = std::min( minDx, distance );
 
     }
   }
   
   
+
   // update positions
-  
-  #pragma ivdep 
   for ( int i = 0; i<NumberOfBodies; i++){
-    x0[i] = x0[i] + timeStepSize * v0[i];
-    x1[i] = x1[i] + timeStepSize * v1[i];
-    x2[i] = x2[i] + timeStepSize * v2[i];
+    x[i][0] = x[i][0] + timeStepSize * v[i][0];
+    x[i][1] = x[i][1] + timeStepSize * v[i][1];
+    x[i][2] = x[i][2] + timeStepSize * v[i][2];
   }
   
   // update velocities
-  
-  #pragma ivdep 
   for ( int i = 0; i < NumberOfBodies; i++){
-    v0[i] = v0[i] + timeStepSize * force0[i] / mass[i];
-    v1[i] = v1[i] + timeStepSize * force1[i] / mass[i];
-    v2[i] = v2[i] + timeStepSize * force2[i] / mass[i];
+    v[i][0] = v[i][0] + timeStepSize * force0[i] / mass[i];
+    v[i][1] = v[i][1] + timeStepSize * force1[i] / mass[i];
+    v[i][2] = v[i][2] + timeStepSize * force2[i] / mass[i];
   }
   
   
 
   // update merged velocities and positions. Set mass to 0
-  if (touched){
-    for (int i = 0; i<NumberOfBodies; i++){
-      for (int j = 0; j < NumberOfBodies; j++){ 
-        if (toBeMerged[i][j]){
-          v0[i] = (mass[i] * v0[i] + mass[j] * v0[j])  / (mass[i] + mass[j]) ;
-          v1[i] = (mass[i] * v1[i] + mass[j] * v1[j])  / (mass[i] + mass[j]) ;
-          v2[i] = (mass[i] * v2[i] + mass[j] * v2[j])  / (mass[i] + mass[j]) ;
-          
-          x0[i] = ((mass[i] * x0[i])  + (mass[j] * x0[j])) / (mass[i] + mass[j]) ;
-          x1[i] = ((mass[i] * x1[i])  + (mass[j] * x1[j])) / (mass[i] + mass[j]) ;
-          x2[i] = ((mass[i] * x2[i])  + (mass[j] * x2[j])) / (mass[i] + mass[j]) ;
+  for (vector<int> t: toBeMerged){
+    v[t[0]][0] = (mass[t[0]] * v[t[0]][0] + mass[t[1]] * v[t[1]][0])  / (mass[t[0]] + mass[t[1]]) ;
+    v[t[0]][1] = (mass[t[0]] * v[t[0]][1] + mass[t[1]] * v[t[1]][1])  / (mass[t[0]] + mass[t[1]]) ;
+    v[t[0]][2] = (mass[t[0]] * v[t[0]][2] + mass[t[1]] * v[t[1]][2])  / (mass[t[0]] + mass[t[1]]) ;
+    
+    x[t[0]][0] = ((mass[t[0]] * x[t[0]][0])  + (mass[t[1]] * x[t[1]][0])) / (mass[t[0]] + mass[t[1]]) ;
+    x[t[0]][1] = ((mass[t[0]] * x[t[0]][1])  + (mass[t[1]] * x[t[1]][1])) / (mass[t[0]] + mass[t[1]]) ;
+    x[t[0]][2] = ((mass[t[0]] * x[t[0]][2])  + (mass[t[1]] * x[t[1]][2])) / (mass[t[0]] + mass[t[1]]) ;
 
-          mass[i] += mass[j];
-          mass[j] = 0.0;
-        }
-      }
-      
-    }
+    mass[t[0]] += mass[t[1]];
+    mass[t[1]] = 0.0;
+  }
+  
 
-    //swap all 0s to end of the array
-    for (int anchor = 0, cur = 0; cur < NumberOfBodies; cur++) {
-      if (mass[cur] != 0.0) {
-        swap(mass[anchor], mass[cur]);
-        swap(v0[anchor], v0[cur]);
-        swap(v1[anchor], v1[cur]);
-        swap(v2[anchor], v2[cur]);
-        swap(x0[anchor], x0[cur]);
-        swap(x1[anchor], x1[cur]);
-        swap(x2[anchor], x2[cur]);
-        anchor++; 
-      }
+  //swap all 0s to end of the array
+  
+  for (int anchor = 0, cur = 0; cur < NumberOfBodies; cur++) {
+    if (mass[cur] != 0.0) {
+      swap(mass[anchor], mass[cur]);
+      swap(v[anchor], v[cur]);
+      swap(x[anchor], x[cur]);
+      anchor++; 
     }
   }
   
   
   
 
-  NumberOfBodies -= mergeCount;
+  NumberOfBodies -= toBeMerged.size();
 
+  
+  
   for (int i = 0; i < NumberOfBodies; i++){
-    maxV = max( maxV, sqrt( v0[i]*v0[i] + v1[i]*v1[i] + v2[i]*v2[i] ) );
+    maxV = std::max( maxV, std::sqrt( v[i][0]*v[i][0] + v[i][1]*v[i][1] + v[i][2]*v[i][2] ) );
+  }
+
+  if (touched) {
+    cout << minDx << endl;
   }
   
-
 
   t += timeStepSize;
 
@@ -405,20 +384,18 @@ int main(int argc, char** argv) {
   openParaviewVideoFile();
 
   int snapshotCounter = 0;
-  // if (t > tPlot) {
-  //   printParaviewSnapshot();
-  //   std::cout << "plotted initial setup" << std::endl;
-  //   tPlot = tPlotDelta;
-  // }
+  if (t > tPlot) {
+    printParaviewSnapshot();
+    std::cout << "plotted initial setup" << std::endl;
+    tPlot = tPlotDelta;
+  }
 
   int timeStepCounter = 0;
-  
-
   while (t<=tFinal) {
     updateBody();
     timeStepCounter++;
     if (t >= tPlot) {
-      // printParaviewSnapshot();
+      //printParaviewSnapshot();
       // std::cout << "plot next snapshot"
     	// 	    << ",\t time step=" << timeStepCounter
     	// 	    << ",\t t="         << t
@@ -432,9 +409,9 @@ int main(int argc, char** argv) {
   }
 
   std::cout << "Number of remaining objects: " << NumberOfBodies << std::endl;
-  std::cout << "Position of first remaining object: " << x0[0] << ", " << x1[0] << ", " << x2[0] << std::endl;
+  std::cout << "Position of first remaining object: " << x[0][0] << ", " << x[0][1] << ", " << x[0][2] << std::endl;
 
-  //closeParaviewVideoFile();
+  closeParaviewVideoFile();
 
   return 0;
 }
