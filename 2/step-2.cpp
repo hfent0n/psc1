@@ -351,7 +351,8 @@ void updateBody() {
   
 
   NumberOfBodies -= mergeCount;
-
+  #pragma ivdep
+  #pragma omp simd reduction(max:maxV)
   for (int i = 0; i < NumberOfBodies; i++){
     maxV = max( maxV, sqrt( v0[i]*v0[i] + v1[i]*v1[i] + v2[i]*v2[i] ) );
   }
