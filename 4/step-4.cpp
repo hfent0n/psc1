@@ -278,97 +278,99 @@ void updateBody() {
   
 
   //calculate force at t
-  #pragma omp parallel for reduction(min:minDx)
-  for (int i = 0; i < NumberOfBodies; i++){
-    for (int j = 0; j < NumberOfBodies; j++){
-  
-      const double distance = sqrt(
-        (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
-        (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
-        (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
-      );
+  #pragma omp parallel
+  {
+    #pragma omp for reduction(min:minDx)
+    for (int i = 0; i < NumberOfBodies; i++){
+      for (int j = 0; j < NumberOfBodies; j++){
+    
+        const double distance = sqrt(
+          (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
+          (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
+          (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
+        );
 
-      // x,y,z forces acting on particle i
-      if (distance){
-        #pragma omp atomic
-        force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        #pragma omp atomic
-        force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        #pragma omp atomic
-        force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-      }
-      minDx = std::min( minDx, distance );
-    }
-  }
-
-  // update positions for t + 0.5
-  #pragma ivdep 
-  #pragma omp parallel for 
-  for ( int i = 0; i<NumberOfBodies; i++){
-    x0_c[i] = x0_c[i] + (timeStepSize * 0.5) * v0_c[i];
-    x1_c[i] = x1_c[i] + (timeStepSize * 0.5) * v1_c[i];
-    x2_c[i] = x2_c[i] + (timeStepSize * 0.5) * v2_c[i];
-  }
-  
-  // update velocities for t + 0.5 
-  #pragma ivdep 
-  #pragma omp parallel for
-  for ( int i = 0; i < NumberOfBodies; i++){
-    v0_c[i] = v0_c[i] + (timeStepSize * 0.5) * force0[i] / mass[i];
-    v1_c[i] = v1_c[i] + (timeStepSize * 0.5) * force1[i] / mass[i];
-    v2_c[i] = v2_c[i] + (timeStepSize * 0.5) * force2[i] / mass[i];
-  }
-
-  //calculate forces at the t + 0.5
-  #pragma omp parallel for reduction(min:minDx)
-  for (int i = 0; i < NumberOfBodies; i++){
-    for (int j = 0; j < NumberOfBodies; j++){
-      
-      const double distance = sqrt(
-        (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
-        (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
-        (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
-      );
-
-      if (distance <= C * (mass[i]*mass[j])) {
-        if (i<j){
-          toBeMerged[i][j] = 1;
-          touched = true;
-          mergeCount++;
+        // x,y,z forces acting on particle i
+        if (distance){
+          #pragma omp atomic
+          force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+          #pragma omp atomic
+          force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+          #pragma omp atomic
+          force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
         }
+        minDx = std::min( minDx, distance );
+      }
+    }
+
+    // update positions for t + 0.5
+    #pragma ivdep 
+    #pragma omp for 
+    for ( int i = 0; i<NumberOfBodies; i++){
+      x0_c[i] = x0_c[i] + (timeStepSize * 0.5) * v0_c[i];
+      x1_c[i] = x1_c[i] + (timeStepSize * 0.5) * v1_c[i];
+      x2_c[i] = x2_c[i] + (timeStepSize * 0.5) * v2_c[i];
+    }
+    
+    // update velocities for t + 0.5 
+    #pragma ivdep 
+    #pragma omp for
+    for ( int i = 0; i < NumberOfBodies; i++){
+      v0_c[i] = v0_c[i] + (timeStepSize * 0.5) * force0[i] / mass[i];
+      v1_c[i] = v1_c[i] + (timeStepSize * 0.5) * force1[i] / mass[i];
+      v2_c[i] = v2_c[i] + (timeStepSize * 0.5) * force2[i] / mass[i];
+    }
+  
+    //calculate forces at the t + 0.5
+    #pragma omp for reduction(min:minDx)
+    for (int i = 0; i < NumberOfBodies; i++){
+      for (int j = 0; j < NumberOfBodies; j++){
         
+        const double distance = sqrt(
+          (x0_c[i]-x0_c[j]) * (x0_c[i]-x0_c[j]) +
+          (x1_c[i]-x1_c[j]) * (x1_c[i]-x1_c[j]) +
+          (x2_c[i]-x2_c[j]) * (x2_c[i]-x2_c[j])
+        );
+
+        if (distance <= C * (mass[i]*mass[j])) {
+          if (i<j){
+            toBeMerged[i][j] = 1;
+            touched = true;
+            mergeCount++;
+          }
+          
+        }
+        // x,y,z forces acting on particle i
+        if (distance){
+          #pragma omp atomic
+          force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+          #pragma omp atomic
+          force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+          #pragma omp atomic
+          force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
+        }
+        minDx = std::min( minDx, distance );
       }
-      // x,y,z forces acting on particle i
-      if (distance){
-        #pragma omp atomic
-        force0[i] += (x0_c[j]-x0_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        #pragma omp atomic
-        force1[i] += (x1_c[j]-x1_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-        #pragma omp atomic
-        force2[i] += (x2_c[j]-x2_c[i]) * mass[i]*mass[j] / (distance*distance*distance);
-      }
-      minDx = std::min( minDx, distance );
+    }
+
+    // update positions for t + 1
+    #pragma ivdep
+    #pragma omp for 
+    for ( int i = 0; i<NumberOfBodies; i++){
+      x0[i] = x0[i] + timeStepSize * v0_c[i];
+      x1[i] = x1[i] + timeStepSize * v1_c[i];
+      x2[i] = x2[i] + timeStepSize * v2_c[i];
+    }
+    
+    // update velocities for t + 1
+    #pragma ivdep
+    #pragma omp for 
+    for ( int i = 0; i < NumberOfBodies; i++){
+      v0[i] = v0[i] + timeStepSize * force0[i] / mass[i];
+      v1[i] = v1[i] + timeStepSize * force1[i] / mass[i];
+      v2[i] = v2[i] + timeStepSize * force2[i] / mass[i];
     }
   }
-
-  // update positions for t + 1
-  #pragma ivdep
-  #pragma omp parallel for 
-  for ( int i = 0; i<NumberOfBodies; i++){
-    x0[i] = x0[i] + timeStepSize * v0_c[i];
-    x1[i] = x1[i] + timeStepSize * v1_c[i];
-    x2[i] = x2[i] + timeStepSize * v2_c[i];
-  }
-  
-  // update velocities for t + 1
-  #pragma ivdep
-  #pragma omp parallel for 
-  for ( int i = 0; i < NumberOfBodies; i++){
-    v0[i] = v0[i] + timeStepSize * force0[i] / mass[i];
-    v1[i] = v1[i] + timeStepSize * force1[i] / mass[i];
-    v2[i] = v2[i] + timeStepSize * force2[i] / mass[i];
-  }
-
 
   // update merged velocities and positions. Set mass to 0
   if (touched){

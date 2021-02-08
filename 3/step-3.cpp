@@ -396,9 +396,6 @@ void updateBody() {
       }
     }
 
-    printMass();
-    printPos();
-    printVel();
   }
   
   
